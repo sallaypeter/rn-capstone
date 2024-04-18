@@ -1,15 +1,23 @@
-import { useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { StyleSheet, View, Image, Text, TextInput, Pressable, ImageBackground } from "react-native";
 import logo from "../assets/images/Logo.png";
 import hero from "../assets/images/HeroImage.png";
+import AppDataContext from "../AddDataContext";
 
-export default function Onboarding() {
+export default function Onboarding({navigation}) {
+    const {appData, setAppData} = useContext(AppDataContext);
     const [formData, setFormData] = useState({
         firstName: '',
         email: ''
     });
     const [errors, setErrors] = useState({});
     const [isNextEnabled, setIsNextEnabled] = useState(false);
+
+    useEffect( () => {
+        navigation.setOptions({
+            headerShown: false
+        });
+    }, [navigation]);
 
     const handleInputChange = (field, value) => {
         setFormData({
@@ -62,7 +70,14 @@ export default function Onboarding() {
     const handleNextPress = () => {
         // Handle next button press
         // For example, navigate to the next screen or perform other actions
+        // Change app state to logged in
         console.log('Next button pressed');
+        setAppData( previousData => ({
+            ...previousData,
+            isOnboardingCompleted: true,
+            firstName: formData.firstName,
+            email: formData.email
+        }));
     };
 
     return (
