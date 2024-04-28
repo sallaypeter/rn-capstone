@@ -71,7 +71,6 @@ export default function Onboarding({navigation}) {
         // Handle next button press
         // For example, navigate to the next screen or perform other actions
         // Change app state to logged in
-        console.log('Next button pressed');
         setAppData( previousData => ({
             ...previousData,
             isOnboardingCompleted: true,
