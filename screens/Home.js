@@ -1,14 +1,17 @@
-import { View, Text, StyleSheet, Pressable, Image, TextInput, FlatList } from "react-native";
-import { useEffect, useState } from "react";
+import { View, Text, StyleSheet, Pressable, Image, TextInput, FlatList, Alert, ScrollView } from "react-native";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useFonts, MarkaziText_400Regular, MarkaziText_500Medium, MarkaziText_600SemiBold, MarkaziText_700Bold} from "@expo-google-fonts/markazi-text";
 import headerLogo from "../assets/images/Logo30.png";
 import profileIcon from "../assets/images/Profile40.png";
 import hero from "../assets/images/HeroImage.png";
 import search from "../assets/images/search25.png";
+import logo from "../assets/images/little-lemon-logo-small.png";
+import noimage from "../assets/images/no_image.png";
 import SplashScreen from "./SplashScreen";
 import jsondata from "./capstone.json";
-
-const API_URL = "https://raw.githubusercontent.com/Meta-Mobile-Developer-PC/Working-With-Data-API/main/capstone.json";
+import { fetchLittleLemonMenuFromAPI } from "./little-lemon-api";
+import { createTable, getMenuItems, saveMenuItems } from "./little-lemon-db";
+import debounce from 'lodash.debounce';
 
 export default function Home( {navigation} ) {
     let [fontsLoaded] = useFonts({
@@ -19,10 +22,12 @@ export default function Home( {navigation} ) {
         "Karla": require("../assets/fonts/Karla-Regular.ttf"),
     });
     const [searchText, setSearchText] = useState('');
+    const [queryText, setQueryText] = useState('');
     const [starters, setStarters] = useState(false);
     const [mains, setMains] = useState(false);
     const [desserts, setDesserts] = useState(false);
     const [drinks, setDrinks] = useState(false);
+    const [specials, setSpecials] = useState(false);
     const [data, setData] = useState([]);
 
     useEffect( () => {
@@ -38,9 +43,68 @@ export default function Home( {navigation} ) {
         });
     }, [navigation]);
 
+    /*
     useEffect( () => {
-        setData(jsondata.menu);
+        const menu = jsondata.menu.map(item => {
+            let newObj = { ...item };
+            return newObj;
+        })
+        setData(menu);
     }, []);
+    */
+
+    useEffect( () => {
+        (async () => {
+            try {
+                await createTable();
+                let menuItems = await getMenuItems('select * from menuitems');
+                if (!menuItems.length) {
+                    const menu = await fetchLittleLemonMenuFromAPI();
+                    await saveMenuItems(menu);
+                    menuItems = await getMenuItems('select * from menuitems');
+                }
+                setData(menuItems);
+            } catch (error) {
+                Alert.alert(error.message);
+            }
+        })();
+    }, []);
+
+    useEffect(() => {
+        let query = "SELECT * FROM menuitems WHERE 1=1";
+        if (queryText.length > 0) {
+            query += ` AND (name LIKE '%${queryText}%')`;
+        }
+        if (starters || mains || desserts || drinks || specials) {
+          let arrCategories = [];
+          if (starters) { arrCategories.push('starters') }
+          if (mains) { arrCategories.push('mains') }
+          if (desserts) { arrCategories.push('desserts') }
+          if (drinks) { arrCategories.push('drinks') }
+          if (specials) { arrCategories.push('specials') }
+          let categoriesText = "";
+          for (let i = 0; i < arrCategories.length; i++) {
+            categoriesText += `\'${arrCategories[i]}\'`;
+            if (i === arrCategories.length - 1) { break }
+            categoriesText += ", ";
+          }
+          query += ` AND category IN (${categoriesText})`;
+        }
+        getMenuItems(query)
+        .then(data => setData(data))
+        .catch(error => Alert.alert(error.message));
+    }, [queryText, starters, mains, desserts, drinks, specials]);
+
+    const lookup = useCallback((q) => {
+        setQueryText(q);
+    }, []);
+
+    const debouncedLookup = useMemo(() => debounce(lookup, 500), [lookup]);
+
+    const handleSearchChange = (text) => {
+        setSearchText(text);
+        debouncedLookup(text);
+      };
 
     const renderItem = ({ item }) => (
         <View style={styles.listRow}>
@@ -49,7 +113,11 @@ export default function Home( {navigation} ) {
                 <Text style={styles.cellDescription} numberOfLines={2}>{item.description}</Text>
                 <Text style={styles.cellPrice}>${item.price}</Text>
             </View>
-            <Image style={styles.cellImage} source={require("../assets/images/pasta.png")}/>
+            <Image
+                style={styles.cellImage}
+                source={{ uri: `https://github.com/Meta-Mobile-Developer-PC/Working-With-Data-API/blob/main/images/${item.image}?raw=true`}}
+                defaultSource={noimage}
+            />
         </View>
     );
 
@@ -77,31 +145,36 @@ export default function Home( {navigation} ) {
                 <TextInput
                     style={styles.input}
                     value={searchText}
-                    onChangeText={text => setSearchText(text)}
+                    onChangeText={handleSearchChange}
                     placeholder="Search foods by name ..."
                     placeholderTextColor="gray"
                 />
             </View>
             <Text style={styles.sectionTitle}>ORDER FOR DELIVERY!</Text>
             <View style={styles.filterView}>
-                <Pressable style={starters ? styles.filterTextViewSelected : styles.filterTextView} onPress={()=>setStarters(!starters)}>
-                    <Text style={styles.filterText}>Starters</Text>
-                </Pressable>
-                <Pressable style={mains ? styles.filterTextViewSelected : styles.filterTextView} onPress={()=>setMains(!mains)}>
-                    <Text style={styles.filterText}>Mains</Text>
-                </Pressable>
-                <Pressable style={desserts ? styles.filterTextViewSelected : styles.filterTextView} onPress={()=>setDesserts(!desserts)}>
-                    <Text style={styles.filterText}>Desserts</Text>
-                </Pressable>
-                <Pressable style={drinks ? styles.filterTextViewSelected : styles.filterTextView} onPress={()=>setDrinks(!drinks)}>
-                    <Text style={styles.filterText}>Drinks</Text>
-                </Pressable>
+                <ScrollView horizontal={true}>
+                    <Pressable style={starters ? styles.filterTextViewSelected : styles.filterTextView} onPress={()=>setStarters(!starters)}>
+                        <Text style={styles.filterText}>Starters</Text>
+                    </Pressable>
+                    <Pressable style={mains ? styles.filterTextViewSelected : styles.filterTextView} onPress={()=>setMains(!mains)}>
+                        <Text style={styles.filterText}>Mains</Text>
+                    </Pressable>
+                    <Pressable style={desserts ? styles.filterTextViewSelected : styles.filterTextView} onPress={()=>setDesserts(!desserts)}>
+                        <Text style={styles.filterText}>Desserts</Text>
+                    </Pressable>
+                    <Pressable style={drinks ? styles.filterTextViewSelected : styles.filterTextView} onPress={()=>setDrinks(!drinks)}>
+                        <Text style={styles.filterText}>Drinks</Text>
+                    </Pressable>
+                    <Pressable style={specials ? styles.filterTextViewSelected : styles.filterTextView} onPress={()=>setSpecials(!specials)}>
+                        <Text style={styles.filterText}>Specials</Text>
+                    </Pressable>
+                </ScrollView>
             </View>
             <FlatList
                 data={data}
                 renderItem={renderItem}
                 keyExtractor={item => item.id.toString()}
-                ItemSeparatorComponent={(<View style={{borderWidth: 1, borderColor: '#EDEFEE'}}/>)}
+                ItemSeparatorComponent={(<View style={{height: 1, backgroundColor: '#EDEFEE'}}/>)}
             />
         </View>
         ) : (
@@ -192,13 +265,16 @@ const styles = StyleSheet.create({
         paddingLeft: 10,
         paddingTop: 10,
     },
+    scrollView: {
+        paddingHorizontal: 10,
+        marginBottom: 10,
+    },
     filterView: {
         flexDirection: 'row',
         gap: 16,
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: 10,
-        marginBottom: 10,
     },
     filterTextView: {
         flex: 1,
@@ -206,6 +282,7 @@ const styles = StyleSheet.create({
         borderColor: '#EDEFEE',
         borderWidth: 1,
         borderRadius: 16,
+        marginRight: 15,
     },
     filterTextViewSelected: {
         flex: 1,
@@ -213,6 +290,7 @@ const styles = StyleSheet.create({
         borderColor: '#F4CE14',
         borderWidth: 1,
         borderRadius: 16,
+        marginRight: 15,
     },
     filterText: {
         color: "#495E57",

@@ -10,6 +10,7 @@ import profileIcon from "../assets/images/Profile40.png";
 import profilePlaceHolder from "../assets/images/Profile.png";
 import checked from "../assets/images/checked_checkbox.png";
 import unchecked from "../assets/images/unchecked_checkbox.png";
+import { deleteTable } from "./little-lemon-db";
 
 export default function Profile( {navigation} ) {
     const {appData, setAppData} = useContext(AppDataContext);
@@ -91,6 +92,7 @@ export default function Profile( {navigation} ) {
 
     const handleLogout = () => {
         setAppData({ isOnboardingCompleted: false });
+        deleteTable();
     }
 
     const handleDiscardChanges = () => {
